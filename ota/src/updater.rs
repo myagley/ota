@@ -1,11 +1,17 @@
+use std::fs;
+use std::io::Write;
+use std::mem;
 use std::path::PathBuf;
 use std::process::Command;
 
 use failure::Fail;
-use futures::Future;
 use futures::future::IntoFuture;
+use futures::{Future, Stream};
 use log;
+use reqwest::r#async::{Client, Decoder};
+use reqwest::IntoUrl;
 use serde_derive::{Deserialize, Serialize};
+use tokio_fs::file::File;
 use tokio_process::CommandExt;
 
 use crate::error::{Error, ErrorKind};
@@ -35,10 +41,7 @@ pub struct Updater {
 
 impl Updater {
     pub fn new(primary: Device, secondary: Device) -> Self {
-        Updater {
-            primary,
-            secondary,
-        }
+        Updater { primary, secondary }
     }
 
     pub fn reboot(&self) -> impl Future<Item = (), Error = Error> {
@@ -48,10 +51,11 @@ impl Updater {
             .into_future()
             .and_then(|child| {
                 log::info!("Rebooting...");
-                child.map(|status| {
-                    log::info!("reboot finished with status {}", status);
-                })
-                .map_err(|e| e.context(ErrorKind::Reboot))
+                child
+                    .map(|status| {
+                        log::info!("reboot finished with status {}", status);
+                    })
+                    .map_err(|e| e.context(ErrorKind::Reboot))
             })
             .map_err(|e| e.context(ErrorKind::Reboot).into())
     }
@@ -68,11 +72,38 @@ impl Updater {
             .into_future()
             .and_then(|child| {
                 log::info!("Swapping partitions...");
-                child.map(|status| {
-                    log::info!("swap finished with status {}", status);
-                })
-                .map_err(|e| e.context(ErrorKind::Swap))
+                child
+                    .map(|status| {
+                        log::info!("swap finished with status {}", status);
+                    })
+                    .map_err(|e| e.context(ErrorKind::Swap))
             })
             .map_err(|e| e.context(ErrorKind::Swap).into())
+    }
+
+    pub fn load<I: IntoUrl>(&self, url: I) -> impl Future<Item = (), Error = Error> {
+        let u = url.into_url().unwrap();
+        log::info!("Loading {} into {:?}", u, self.secondary.path);
+        let device = fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&self.secondary.path)
+            .unwrap();
+        let mut file = File::from_std(device);
+        Client::new()
+            .get(u)
+            .send()
+            .map_err(|e| e.context(ErrorKind::Download))
+            .and_then(move |mut res| {
+                log::info!("Download status: {}", res.status());
+                let body = mem::replace(res.body_mut(), Decoder::empty());
+                body.map_err(|e| e.context(ErrorKind::Download))
+                    .for_each(move |chunk| {
+                        file.write_all(&chunk)
+                            .map_err(|e| e.context(ErrorKind::Download))
+                    })
+                    .map_err(|e| e.context(ErrorKind::Download))
+            })
+            .map_err(|e| e.context(ErrorKind::Download).into())
     }
 }

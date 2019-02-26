@@ -13,10 +13,12 @@ pub enum ErrorKind {
     Reboot,
     #[fail(display = "Failed to swap devices.")]
     Swap,
+    #[fail(display = "Failed to download new image.")]
+    Download,
 }
 
 impl Fail for Error {
-fn cause(&self) -> Option<&Fail> {
+    fn cause(&self) -> Option<&Fail> {
         self.inner.cause()
     }
 
