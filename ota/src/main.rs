@@ -48,7 +48,7 @@ fn main() {
         })
         .then(|result| {
             log::info!("Shutdown finished.");
-            result.expect("couldn't send shutodown notification");
+            result.expect("couldn't send shutdown notification");
             Ok(())
         });
     runtime.spawn(shutdown);

@@ -16,11 +16,16 @@ impl Updater {
     }
 
     pub fn reboot(&self) -> impl Future<Item = (), Error = Error> {
-        Command::new("reboot")
-            .spawn_async()
+        Command::new("/sbin/reboot")
+            .status_async()
+            .map_err(|e| e.context(ErrorKind::Reboot))
             .into_future()
-            .map(|_child| {
+            .and_then(|child| {
                 log::info!("Rebooting...");
+                child.map(|status| {
+                    log::info!("reboot finished with status {}", status);
+                })
+                .map_err(|e| e.context(ErrorKind::Reboot))
             })
             .map_err(|e| e.context(ErrorKind::Reboot).into())
     }
