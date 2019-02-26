@@ -2,6 +2,9 @@
 name = "ota"
 version = "0.1.0"
 authors = ["Mike Yagley <myagley@gmail.com>"]
+repository = "https://github.com/myagley/ota.git"
+homepage = "https://github.com/myagley/ota"
+description = "Azure IoT update client"
 edition = "2018"
 
 [dependencies]

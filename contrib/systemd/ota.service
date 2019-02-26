@@ -1,5 +1,5 @@
 [Unit]
-Description=Azure IoT Edge update client
+Description=Azure IoT update client
 After=network-online.target
 Wants=network-online.target
 
