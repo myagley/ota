@@ -1,7 +1,10 @@
+use std::process::Command;
+use std::str;
 use std::time::Duration;
 
 use azure_iot_mqtt::device;
 use futures::{Future, Stream};
+use regex::Regex;
 use serde_json::json;
 use tokio::runtime::Runtime;
 use tokio_signal;
@@ -9,7 +12,7 @@ use tokio_signal;
 mod error;
 mod updater;
 
-use crate::updater::Updater;
+use crate::updater::{Device, Updater};
 
 fn main() {
     env_logger::Builder::from_env(env_logger::Env::new().filter_or("AZURE_IOT_OTA_LOG", "mqtt=debug,mqtt::logging=trace,azure_iot_mqtt=debug,ota=info")).init();
@@ -21,7 +24,23 @@ fn main() {
     let mut runtime = Runtime::new().expect("couldn't initialize tokio runtime");
     let executor = runtime.executor();
 
-    let updater = Updater::new();
+    let re = Regex::new(r"ota_boot_partition=(?P<partition>\d)").expect("regex failed");
+    let output = Command::new("/usr/bin/fw_printenv")
+        .arg("ota_boot_partition")
+        .output()
+        .unwrap();
+    let caps = re.captures(str::from_utf8(&output.stdout).unwrap()).unwrap();
+    let partition: i8 = caps["partition"].parse().unwrap();
+    let mut updater = if partition == 3 {
+        let primary = Device::new("/dev/mmcblk0p3", 0, 3);
+        let secondary = Device::new("/dev/mmcblk0p2", 0, 2);
+        Updater::new(primary, secondary)
+    } else {
+        let primary = Device::new("/dev/mmcblk0p2", 0, 2);
+        let secondary = Device::new("/dev/mmcblk0p3", 0, 3);
+        Updater::new(primary, secondary)
+    };
+
     let client = device::Client::new(
         iothub.to_string(),
         device_id,
@@ -59,31 +78,51 @@ fn main() {
             log::info!("direct method {:?} invoked with payload {:?}", name, payload);
             let handle = direct_method_response_handle.clone();
 
-            let blah = if name == "reboot" {
-                log::info!("Received reboot request...");
-                futures::future::Either::A(updater.reboot()
-                    .then(move |result| {
-                        match result {
-                            Ok(_) => handle.respond(request_id.clone(), azure_iot_mqtt::Status::Ok, json!({"message": "rebooting"})),
-                            Err(_e) => handle.respond(request_id.clone(), azure_iot_mqtt::Status::BadRequest, payload),
-                        }
-                    })
-                    .then(move |result| {
-                        let () = result.expect("couldn't send direct method response");
-                        log::info!("Rebooting finished and responded to request");
-                        Ok(())
-                    }))
-            } else {
-                // Respond with status 200 and same payload
-                futures::future::Either::B(handle
-                    .respond(request_id.clone(), azure_iot_mqtt::Status::Ok, payload)
-                    .then(move |result| {
-                        let () = result.expect("couldn't send direct method response");
-                        log::info!("Responded to request {}", request_id);
-                        Ok(())
-                    }))
+            match name.as_ref() {
+                "reboot" => {
+                    log::info!("Received reboot request...");
+                    let result = updater.reboot()
+                        .then(move |result| {
+                            match result {
+                                Ok(_) => handle.respond(request_id.clone(), azure_iot_mqtt::Status::Ok, json!({"message": "rebooting"})),
+                                Err(_e) => handle.respond(request_id.clone(), azure_iot_mqtt::Status::BadRequest, payload),
+                            }
+                        })
+                        .then(move |result| {
+                            let () = result.expect("couldn't send direct method response");
+                            log::info!("Rebooting finished and responded to request");
+                            Ok(())
+                        });
+                    executor.spawn(result)
+                },
+                "swap" => {
+                    log::info!("Received swap request...");
+                    let result = updater.swap()
+                        .then(move |result| {
+                            match result {
+                                Ok(_) => handle.respond(request_id.clone(), azure_iot_mqtt::Status::Ok, json!({"message": "swapped"})),
+                                Err(_e) => handle.respond(request_id.clone(), azure_iot_mqtt::Status::BadRequest, payload),
+                            }
+                        })
+                        .then(move |result| {
+                            let () = result.expect("couldn't send direct method response");
+                            log::info!("Swapping finished and responded to request");
+                            Ok(())
+                        });
+                    executor.spawn(result)
+                },
+                _ => {
+                    // Respond with status 200 and same payload
+                    let result = handle
+                        .respond(request_id.clone(), azure_iot_mqtt::Status::Ok, payload)
+                        .then(move |result| {
+                            let () = result.expect("couldn't send direct method response");
+                            log::info!("Responded to request {}", request_id);
+                            Ok(())
+                        });
+                    executor.spawn(result)
+                },
             };
-            executor.spawn(blah);
         }
 
         Ok(())

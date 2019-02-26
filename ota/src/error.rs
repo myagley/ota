@@ -11,6 +11,8 @@ pub struct Error {
 pub enum ErrorKind {
     #[fail(display = "Failed to reboot device.")]
     Reboot,
+    #[fail(display = "Failed to swap devices.")]
+    Swap,
 }
 
 impl Fail for Error {
