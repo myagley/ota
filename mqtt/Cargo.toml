@@ -1,0 +1,17 @@
+[package]
+name = "mqtt"
+version = "0.1.0"
+authors = ["Arnav Singh <arsing@microsoft.com>"]
+edition = "2018"
+
+[dependencies]
+bytes = "0.4"
+futures = "0.1"
+log = "0.4"
+tokio = "0.1"
+
+[dev-dependencies]
+env_logger = "0.6"
+structopt = "0.2"
+structopt-derive = "0.2"
+tokio-signal = "0.2"

@@ -1,0 +1,7 @@
+/Cargo.lock
+/target/
+
+/mqtt-fuzz/Cargo.lock
+/mqtt-fuzz/in/
+/mqtt-fuzz/out/
+/mqtt-fuzz/target/

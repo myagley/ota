@@ -1,0 +1,17 @@
+[package]
+name = "mqtt-fuzz"
+version = "0.1.0"
+authors = ["Arnav Singh <arsing@microsoft.com>"]
+edition = "2018"
+publish = false
+
+[dependencies]
+afl = "0.4"
+mqtt = { path = ".." }
+bytes = "0.4"
+tokio = "0.1"
+
+[build-dependencies]
+bytes = "0.4"
+mqtt = { path = ".." }
+tokio = "0.1"
