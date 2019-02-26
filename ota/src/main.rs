@@ -2,8 +2,14 @@ use std::time::Duration;
 
 use azure_iot_mqtt::device;
 use futures::{Future, Stream};
+use serde_json::json;
 use tokio::runtime::Runtime;
 use tokio_signal;
+
+mod error;
+mod updater;
+
+use crate::updater::Updater;
 
 fn main() {
     env_logger::Builder::from_env(env_logger::Env::new().filter_or("AZURE_IOT_OTA_LOG", "mqtt=debug,mqtt::logging=trace,azure_iot_mqtt=debug,ota=info")).init();
@@ -15,6 +21,7 @@ fn main() {
     let mut runtime = Runtime::new().expect("couldn't initialize tokio runtime");
     let executor = runtime.executor();
 
+    let updater = Updater::new();
     let client = device::Client::new(
         iothub.to_string(),
         device_id,
@@ -50,15 +57,33 @@ fn main() {
         log::info!("received message {:?}", message);
         if let azure_iot_mqtt::device::Message::DirectMethod { name, payload, request_id } = message {
             log::info!("direct method {:?} invoked with payload {:?}", name, payload);
+            let handle = direct_method_response_handle.clone();
 
-            // Respond with status 200 and same payload
-            executor.spawn(direct_method_response_handle
-                .respond(request_id.clone(), azure_iot_mqtt::Status::Ok, payload)
-                .then(move |result| {
-                    let () = result.expect("couldn't send direct method response");
-                    log::info!("Responded to request {}", request_id);
-                    Ok(())
-                }));
+            let blah = if name == "reboot" {
+                log::info!("Received reboot request...");
+                futures::future::Either::A(updater.reboot()
+                    .then(move |result| {
+                        match result {
+                            Ok(_) => handle.respond(request_id.clone(), azure_iot_mqtt::Status::Ok, json!({"message": "rebooting"})),
+                            Err(_e) => handle.respond(request_id.clone(), azure_iot_mqtt::Status::BadRequest, payload),
+                        }
+                    })
+                    .then(move |result| {
+                        let () = result.expect("couldn't send direct method response");
+                        log::info!("Rebooting finished and responded to request");
+                        Ok(())
+                    }))
+            } else {
+                // Respond with status 200 and same payload
+                futures::future::Either::B(handle
+                    .respond(request_id.clone(), azure_iot_mqtt::Status::Ok, payload)
+                    .then(move |result| {
+                        let () = result.expect("couldn't send direct method response");
+                        log::info!("Responded to request {}", request_id);
+                        Ok(())
+                    }))
+            };
+            executor.spawn(blah);
         }
 
         Ok(())

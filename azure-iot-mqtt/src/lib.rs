@@ -77,6 +77,7 @@ impl std::error::Error for CreateClientError {
 }
 
 /// Used to respond to direct methods
+#[derive(Clone)]
 pub struct DirectMethodResponseHandle(futures::sync::mpsc::Sender<DirectMethodResponse>);
 
 impl DirectMethodResponseHandle {
