@@ -1,0 +1,16 @@
+[Unit]
+Description=Azure IoT Edge update client
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/bin/ota
+KillMode=process
+TimeoutStartSec=600
+TimeoutStopSec=40
+Restart=on-failure
+User=root
+Group=root
+
+[Install]
+WantedBy=multi-user.target
