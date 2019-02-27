@@ -37,7 +37,7 @@ fn main() {
     let executor = runtime.executor();
 
     let re = Regex::new(r"ota_boot_partition=(?P<partition>\d)").expect("regex failed");
-    let output = Command::new("/usr/bin/fw_printenv")
+    let output = Command::new("/sbin/fw_printenv")
         .arg("ota_boot_partition")
         .output()
         .unwrap();
