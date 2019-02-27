@@ -64,7 +64,7 @@ impl Updater {
         let partition = self.secondary.partition;
         std::mem::swap(&mut self.primary, &mut self.secondary);
 
-        Command::new("/usr/bin/fw_setenv")
+        Command::new("/sbin/fw_setenv")
             .arg("ota_boot_partition")
             .arg(format!("{}", partition))
             .status_async()
@@ -96,9 +96,12 @@ impl Updater {
             .map_err(|e| e.context(ErrorKind::Download))
             .and_then(move |mut res| {
                 log::info!("Download status: {}", res.status());
+                let mut bytes = 0;
                 let body = mem::replace(res.body_mut(), Decoder::empty());
                 body.map_err(|e| e.context(ErrorKind::Download))
                     .for_each(move |chunk| {
+                        bytes = bytes + chunk.len();
+                        log::info!("Progress - {}", bytes);
                         file.write_all(&chunk)
                             .map_err(|e| e.context(ErrorKind::Download))
                     })

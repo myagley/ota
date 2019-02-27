@@ -168,7 +168,7 @@ fn main() {
                         })
                         .then(move |result| {
                             let () = result.expect("couldn't send direct method response");
-                            log::info!("Rebooting finished and responded to request");
+                            log::info!("Loading finished and responded to request");
                             Ok(())
                         });
                     executor.spawn(result)
