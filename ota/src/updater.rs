@@ -96,12 +96,16 @@ impl Updater {
             .map_err(|e| e.context(ErrorKind::Download))
             .and_then(move |mut res| {
                 log::info!("Download status: {}", res.status());
+                let mut chunks = 0;
                 let mut bytes = 0;
                 let body = mem::replace(res.body_mut(), Decoder::empty());
                 body.map_err(|e| e.context(ErrorKind::Download))
                     .for_each(move |chunk| {
                         bytes = bytes + chunk.len();
-                        log::info!("Progress - {}", bytes);
+                        chunks = chunks + 1;
+                        if chunks % 100 == 0 {
+                            log::info!("Progress - {}", bytes);
+                        }
                         file.write_all(&chunk)
                             .map_err(|e| e.context(ErrorKind::Download))
                     })
