@@ -1,0 +1,22 @@
+digraph update_statemachine {
+  rankdir=LR;
+  node [shape = circle, width = 1.25, fixedsize = true];
+
+  Start[shape = point, width = 0.25; color=black; label=""];
+  Off;
+  OffStaged;
+  Running;
+  Staged;
+
+  Start -> Off;
+  Off -> Running [ label = "Boot" ];
+  Running -> Off [ label = "Reset" ];
+  Running -> Staged [ label = "Update" ];
+
+  Staged -> OffStaged [label = "Reset" ];
+  OffStaged -> RunningStaged [ label = "Boot" ];
+  RunningStaged -> Running [ label = "Commit" ];
+  RunningStaged -> OffStaged [ label = "Reset" ];
+
+  { rank=same; Off, OffStaged }
+}
